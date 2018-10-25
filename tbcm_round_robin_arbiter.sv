@@ -42,7 +42,6 @@ module tbcm_round_robin_arbiter #(
   assign  o_grant     = grant;
   assign  grant       = (grab_grant) ? grant_next
                       : (busy      ) ? current_grant : '0;
-  assign  grant_next  = merge_grant_next(grant_next_each);
   assign  grab_grant  = |(i_request & {REQUESTS{~busy}});
   always_ff @(posedge clk, negedge rst_n) begin
     if (!rst_n) begin
@@ -53,33 +52,29 @@ module tbcm_round_robin_arbiter #(
     end
   end
 
-  for (genvar i = 0;i < REQUESTS;++i) begin : g_grant_next
-    assign  grant_next_each[i]  = get_grant(i_request, current_grant[i], i);
-  end
-
-  function automatic logic [REQUESTS-1:0] merge_grant_next(
-    input logic [REQUESTS-1:0] grant_next_each[REQUESTS]
+  tbcm_mux #(
+    .WIDTH    (REQUESTS ),
+    .ENTRIES  (REQUESTS ),
+    .ONE_HOT  (1        )
+  ) u_grant_mux (
+    .i_select (current_grant    ),
+    .i_data   (grant_next_each  ),
+    .o_data   (grant_next       )
   );
-    logic [REQUESTS-1:0]  grant_next;
-    grant_next  = grant_next_each[0];
-    for (int i = 1;i < REQUESTS;++i) begin
-      grant_next  = grant_next | grant_next_each[i];
-    end
-    return grant_next;
-  endfunction
+
+  for (genvar i = 0;i < REQUESTS;++i) begin : g_grant_next
+    assign  grant_next_each[i]  = get_grant(i_request, i);
+  end
 
   function automatic logic [REQUESTS-1:0] get_grant(
     input logic [REQUESTS-1:0]  request,
-    input logic                 current_grant,
     input int                   index
   );
-    logic [1*REQUESTS-1:0]  request_masked;
     logic [2*REQUESTS-1:0]  request_temp;
     logic [1*REQUESTS-1:0]  request_rearranged;
     logic [1*REQUESTS-1:0]  grant;
     logic [2*REQUESTS-1:0]  grant_temp;
-    request_masked      = (current_grant) ? request : '0;
-    request_temp        = {request_masked, request_masked};
+    request_temp        = {request, request};
     request_rearranged  = request_temp[index+1+:REQUESTS];
     grant               = request_rearranged & (~(request_rearranged + '1));
     grant_temp          = {grant, grant};
