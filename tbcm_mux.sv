@@ -22,11 +22,18 @@ module tbcm_mux #(
     input logic [ENTRIES-1:0] select,
     input DATA_TYPE           in_data[ENTRIES]
   );
-    DATA_TYPE out_data;
-    out_data  = {DATA_WIDTH{select[0]}} & in_data[0];
-    for (int i = 1;i < ENTRIES;++i) begin
-      out_data  = out_data | ({DATA_WIDTH{select[i]}} & in_data[i]);
+    DATA_TYPE out_data  = DATA_TYPE'(0);
+    for (int i = 0;i < ENTRIES;++i) begin
+      out_data  = and_or(out_data, select[i], in_data[i]);
     end
     return out_data;
+  endfunction
+
+  function automatic DATA_TYPE and_or(
+    input DATA_TYPE current_data,
+    input logic     select,
+    input DATA_TYPE in_data
+  );
+    return DATA_TYPE'(current_data | (in_data & {DATA_WIDTH{select}}));
   endfunction
 endmodule
