@@ -3,37 +3,34 @@ module tbcm_mux #(
   parameter   type  DATA_TYPE     = logic [WIDTH-1:0],
   parameter   int   ENTRIES       = 2,
   parameter   bit   ONE_HOT       = 1,
-  localparam  int   SELECT_WIDTH  = (ONE_HOT) ? ENTRIES : $clog2(ENTRIES)
+  localparam  int   INDEX_WIDTH   = $clog2(ENTRIES),
+  localparam  int   SELECT_WIDTH  = (ONE_HOT) ? ENTRIES : INDEX_WIDTH
 )(
   input   logic [SELECT_WIDTH-1:0]  i_select,
   input   DATA_TYPE                 i_data[ENTRIES],
   output  DATA_TYPE                 o_data
 );
-  localparam  int DATA_WIDTH  = $bits(DATA_TYPE);
+  logic [INDEX_WIDTH-1:0] index;
 
-  if (ONE_HOT) begin : g_one_hot
-    assign  o_data  = one_hot_mux(i_select, i_data);
-  end
-  else begin : g_binary
-    assign  o_data  = i_data[i_select];
-  end
+  assign  index   = get_index(i_select);
+  assign  o_data  = i_data[index];
 
-  function automatic DATA_TYPE one_hot_mux(
-    input logic [ENTRIES-1:0] select,
-    input DATA_TYPE           in_data[ENTRIES]
+  function automatic logic [INDEX_WIDTH-1:0] get_index(
+    logic [SELECT_WIDTH-1:0]  select
   );
-    DATA_TYPE out_data  = DATA_TYPE'(0);
-    for (int i = 0;i < ENTRIES;++i) begin
-      out_data  = and_or(out_data, select[i], in_data[i]);
+    logic [INDEX_WIDTH-1:0] index;
+    if (ONE_HOT) begin
+      for (int i = 0;i < INDEX_WIDTH;++i) begin
+        logic [ENTRIES-1:0] temp;
+        for (int j = 0;j < ENTRIES;++j) begin
+          temp[j] = select[j] & j[i];
+        end
+        index[i]  = |temp;
+      end
     end
-    return out_data;
-  endfunction
-
-  function automatic DATA_TYPE and_or(
-    input DATA_TYPE current_data,
-    input logic     select,
-    input DATA_TYPE in_data
-  );
-    return DATA_TYPE'(current_data | (in_data & {DATA_WIDTH{select}}));
+    else begin
+      index = select;
+    end
+    return index;
   endfunction
 endmodule
