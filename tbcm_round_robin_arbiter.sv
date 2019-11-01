@@ -14,7 +14,6 @@ module tbcm_round_robin_arbiter #(
   logic [REQUESTS-1:0]  grant;
   logic [REQUESTS-1:0]  current_grant;
   logic [REQUESTS-1:0]  grant_next;
-  logic [REQUESTS-1:0]  grant_next_each[REQUESTS];
 
 //--------------------------------------------------------------
 //  State
@@ -52,23 +51,27 @@ module tbcm_round_robin_arbiter #(
     end
   end
 
-  tbcm_mux #(
-    .WIDTH    (REQUESTS ),
-    .ENTRIES  (REQUESTS ),
-    .ONE_HOT  (1        )
-  ) u_grant_mux (
-    .i_select (current_grant    ),
-    .i_data   (grant_next_each  ),
-    .o_data   (grant_next       )
-  );
+  assign  grant_next  = get_grant(current_grant, i_request);
 
-  for (genvar i = 0;i < REQUESTS;++i) begin : g_grant_next
-    assign  grant_next_each[i]  = get_grant(i_request, i);
-  end
+  tbcm_selector #(.WIDTH(REQUESTS), .ENTRIES(REQUESTS)) u_selector();
+  tbcm_onehot #(.WIDTH(REQUESTS))                       u_onehot();
 
   function automatic logic [REQUESTS-1:0] get_grant(
-    input logic [REQUESTS-1:0]  request,
-    input int                   index
+    logic [REQUESTS-1:0]  current_grant,
+    logic [REQUESTS-1:0]  request
+  );
+    logic [REQUESTS-1:0][REQUESTS-1:0]  grant_each;
+
+    for (int i = 0;i < REQUESTS;++i) begin
+      grant_each[i] = get_grant_each(request, i);
+    end
+
+    return u_selector.mux(current_grant, grant_each);
+  endfunction
+
+  function automatic logic [REQUESTS-1:0] get_grant_each(
+    logic [REQUESTS-1:0]  request,
+    int                   index
   );
     logic [2*REQUESTS-1:0]  request_temp;
     logic [1*REQUESTS-1:0]  request_rearranged;
@@ -76,7 +79,7 @@ module tbcm_round_robin_arbiter #(
     logic [2*REQUESTS-1:0]  grant_temp;
     request_temp        = {request, request};
     request_rearranged  = request_temp[index+1+:REQUESTS];
-    grant               = request_rearranged & (~(request_rearranged + '1));
+    grant               = u_onehot.to_onehot(request_rearranged);
     grant_temp          = {grant, grant};
     return grant_temp[REQUESTS-1-index+:REQUESTS];
   endfunction
