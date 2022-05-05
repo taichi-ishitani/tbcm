@@ -41,7 +41,7 @@ interface tbcm_crc
 
   localparam  bit [CRC_WIDTH-1:0][DATA_WIDTH-1:0] CRC_MATRIX  = get_crc_matrix();
 
-  function logic [CRC_WIDTH-1:0] get(logic [DATA_WIDTH-1:0] data);
+  function automatic logic [CRC_WIDTH-1:0] get(logic [DATA_WIDTH-1:0] data);
     logic [CRC_WIDTH-1:0] crc;
 
     for (int i = 0;i < CRC_WIDTH;++i) begin
