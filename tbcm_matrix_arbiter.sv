@@ -168,13 +168,15 @@ module tbcm_matrix_arbiter
       end
     endcase
 
+    priority_matrix_next  = priority_matrix;
     for (int i = 0;i < REQUESTS;++i) begin
-      for (int j = 0;j < REQUESTS;++j) begin
-        case (1'b1)
-          update_position[j]: priority_matrix_next[i][j]  = column_value;
-          update_position[i]: priority_matrix_next[i][j]  = row_value;
-          default:            priority_matrix_next[i][j]  = priority_matrix[i][j];
-        endcase
+      for (int j = i + 1;j < REQUESTS;++j) begin
+        if (update_position[j]) begin
+          priority_matrix_next[i][j]  = column_value;
+        end
+        else if (update_position[i]) begin
+          priority_matrix_next[i][j]  = row_value;
+        end
       end
     end
 
