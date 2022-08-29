@@ -16,22 +16,24 @@ module tbcm_matrix_arbiter
   logic [REQUESTS-1:0]                request;
   logic [1:0][REQUESTS-1:0]           grant;
   logic                               grab_grant;
-
-  always_comb begin
-    grab_grant  = request != '0;
-  end
+  logic                               busy;
 
   always_comb begin
     o_grant = grant[1];
   end
 
+  always_comb begin
+    request     = (!busy) ? i_request : '0;
+    grab_grant  = request != '0;
+  end
+
   if (KEEP_RESULT) begin : g_result
-    logic                 busy;
     logic [REQUESTS-1:0]  grant_latched;
 
     always_comb begin
-      request   = (!busy     ) ? i_request : '0;
-      grant[1]  = (grab_grant) ? grant[0]  : grant_latched;
+      grant[1]  =
+        ((grab_grant) ? grant[0]      : '0) |
+        ((busy      ) ? grant_latched : '0);
     end
 
     always_ff @(posedge clk, negedge rst_n) begin
@@ -57,8 +59,11 @@ module tbcm_matrix_arbiter
   end
   else begin : g_result
     always_comb begin
-      request   = i_request;
-      grant[1]  = grant[0];
+      grant[1]  = (grab_grant) ? grant[0] : '0;
+    end
+
+    always_comb begin
+      busy  = '0;
     end
   end
 
@@ -177,12 +182,78 @@ module tbcm_matrix_arbiter
   endfunction
 
 `ifndef SYNTHESIS
-  bit [REQUESTS-1:0][$clog2(REQUESTS)-1:0]  priority_value;
+  int                                       row_values[REQUESTS];
+  int                                       column_values[REQUESTS];
+  bit [REQUESTS-1:0][$clog2(REQUESTS)-1:0]  priority_values;
 
   always_comb begin
     for (int i = 0;i < REQUESTS;++i) begin
-      priority_value[i] = $countones(priority_matrix[i]) - priority_matrix[i][i];
+      bit [REQUESTS-1:0]  row;
+      bit [REQUESTS-1:0]  column;
+
+      row = priority_matrix[i];
+      for (int j = 0;j < REQUESTS;++j) begin
+        column[j] = priority_matrix[j][i];
+      end
+
+      row_values[i]       = $countones(row) - row[i];
+      column_values[i]    = $countones(column) - column[i];
+      priority_values[i]  = row_values[i];
     end
   end
+
+  function automatic bit is_unique(int array[REQUESTS]);
+    int q[$];
+    q = array.unique;
+    return q.size() == REQUESTS;
+  endfunction
+
+  property p_row_values_should_be_unique;
+    @(posedge clk) disable iff (!rst_n)
+    is_unique(row_values);
+  endproperty
+
+  property p_column_values_should_be_unique;
+    @(posedge clk) disable iff (!rst_n)
+    is_unique(column_values);
+  endproperty
+
+  property p_grant_should_be_onehot;
+    @(posedge clk) disable iff (!rst_n)
+    (request != '0) |-> $countones(grant[0]) == 1;
+  endproperty
+
+  property p_grant_should_be_for_active_request;
+    @(posedge clk) disable iff (!rst_n)
+    (request != '0) |-> ((request & grant[0]) != '0);
+  endproperty
+
+  property p_grant_should_be_kept_while_busy;
+    @(posedge clk) disable iff (!rst_n)
+    busy |-> grant[1] == $past(grant[1]);
+  endproperty
+
+  property p_grant_should_be_low_during_idle;
+    @(posedge clk) disable iff (!rst_n)
+    ((i_request == '0) && (!busy)) |-> (grant[1] == '0);
+  endproperty
+
+  ast_row_values_should_be_unique:
+  assert property(p_row_values_should_be_unique);
+
+  ast_column_values_should_be_unique:
+  assert property(p_column_values_should_be_unique);
+
+  ast_grant_should_be_onehot:
+  assert property(p_grant_should_be_onehot);
+
+  ast_grant_should_be_for_active_request:
+  assert property(p_grant_should_be_for_active_request);
+
+  ast_grant_should_be_kept_while_busy:
+  assert property(p_grant_should_be_kept_while_busy);
+
+  ast_grant_should_be_low_during_idle:
+  assert property(p_grant_should_be_low_during_idle);
 `endif
 endmodule
