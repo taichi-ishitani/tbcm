@@ -1,16 +1,18 @@
 module tbcm_matrix_arbiter
   import  tbcm_matrix_arbiter_pkg::*;
 #(
-  parameter int REQUESTS    = 2,
-  parameter bit KEEP_RESULT = 1
+  parameter int                               REQUESTS          = 2,
+  parameter bit                               KEEP_RESULT       = 1,
+  parameter bit [REQUESTS-1:0][REQUESTS-1:0]  INITIAL_PRIORITY  = '1
 )(
-  input   var                           clk,
-  input   var                           rst_n,
-  input   var                           i_reset_priority,
-  input   var tbcm_matrix_arbiter_type  i_arbiter_type,
-  input   var [REQUESTS-1:0]            i_request,
-  output  var [REQUESTS-1:0]            o_grant,
-  input   var [REQUESTS-1:0]            i_free
+  input   var                               clk,
+  input   var                               rst_n,
+  input   var                               i_reset_priority,
+  input   var [REQUESTS-1:0][REQUESTS-1:0]  i_initial_priority,
+  input   var tbcm_matrix_arbiter_type      i_arbiter_type,
+  input   var [REQUESTS-1:0]                i_request,
+  output  var [REQUESTS-1:0]                o_grant,
+  input   var [REQUESTS-1:0]                i_free
 );
   logic [REQUESTS-1:0][REQUESTS-1:0]  priority_matrix;
   logic [REQUESTS-1:0]                request;
@@ -93,10 +95,10 @@ module tbcm_matrix_arbiter
         else begin : g
           always_ff @(posedge clk, negedge rst_n) begin
             if (!rst_n) begin
-              priority_matrix[row][column]  <= '1;
+              priority_matrix[row][column]  <= INITIAL_PRIORITY[row][column];
             end
             else if (i_reset_priority) begin
-              priority_matrix[row][column]  <= '1;
+              priority_matrix[row][column]  <= i_initial_priority[row][column];
             end
             else if (grab_grant) begin
               priority_matrix[row][column]  <= priority_matrix_next[row][column];
